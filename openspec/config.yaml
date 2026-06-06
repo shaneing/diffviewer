@@ -1,0 +1,31 @@
+schema:spec-driven
+
+# Project context
+# This is shown to AI when creating artifacts.
+context: |
+  Application: CodeReviwer Desktop Diff Viewer
+  Tech Stack: React, Vite, TypeScript, Vanilla CSS, Lucide React, Tauri v2, Rust
+  Domain & Key Patterns:
+    - A read-only, fully offline desktop application for comparing local Git files and resolving merge conflicts.
+    - Strict read-only boundary: Must not write to the inspected repositories, create commits, push, or alter git states on disk.
+    - File Tree: Hierarchical collapsible file tree constructed dynamically from Git status (including untracked files expanded using -uall).
+    - Multi-Tab Layout: Premium JetBrains Darcula style tab-bar managing multiple open files.
+    - 2-Way Diff View: Side-by-side view (Base version vs. Current version) with word-level highlights (LCS alignment) and synchronized scrolling.
+    - 3-Way Diff View: Triggered automatically for conflict files, showing Local Changes (Ours), Base version (common ancestor), and Remote Changes (Theirs) in a read-only three-pane layout.
+    - Sync Scrolling: Synced horizontally and vertically across all panes with a synchronous lock release to prevent lag.
+
+# Per-artifact rules
+# Add custom rules for specific artifacts.
+rules:
+  proposal:
+    - Clearly document the read-only and offline-first boundary.
+    - Always list out-of-scope operations (such as write/commit/push actions).
+  specs:
+    - Write specifications using explicit GIVEN/WHEN/THEN scenarios.
+    - Enforce the offline, no-network, local-only requirements.
+  design:
+    - Specify frontend component states and backend Rust command definitions.
+    - Enforce clean segregation between backend shell operations and frontend state.
+  tasks:
+    - Break tasks down into granular, verifiable milestones.
+    - Keep tasks focused on incremental, compilable progress.
