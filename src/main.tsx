@@ -1012,6 +1012,13 @@ function App() {
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const source = e.currentTarget;
     
+    // Set horizontal scroll custom property for background wave alignment
+    const isRtl = window.getComputedStyle(source).direction === 'rtl';
+    const scrollXVal = isRtl
+      ? source.scrollLeft + (source.scrollWidth - source.clientWidth)
+      : source.scrollLeft;
+    source.style.setProperty('--scroll-x', `${scrollXVal}px`);
+
     if (isSyncing.current) return;
     
     // Detect which pane is actively being scrolled by the user using ref comparisons
@@ -1070,15 +1077,35 @@ function App() {
 
       syncGutterOffsets();
     } else {
-      // Original linear scroll sync for 1-way and 3-way
-      const panes = [leftRef.current, middleRef.current, centerRef.current, rightRef.current];
+      // Horizontal scroll sync with RTL/LTR mapping for 1-way and 3-way
+      const panes = [
+        { key: 'left', ref: leftRef.current },
+        { key: 'center', ref: centerRef.current },
+        { key: 'right', ref: rightRef.current }
+      ];
+      
+      const leftMax = leftRef.current ? leftRef.current.scrollWidth - leftRef.current.clientWidth : 0;
+      
+      // Calculate normalized scrollLeft (distance from left content edge)
+      let normalizedScrollLeft = targetScrollLeft;
+      if (sourceKey === 'left') {
+        normalizedScrollLeft = leftMax + targetScrollLeft;
+      }
+      
       for (const p of panes) {
-        if (p && p !== source) {
-          if (Math.abs(p.scrollTop - targetScrollTop) > 0.5) {
-            p.scrollTop = targetScrollTop;
+        if (p.ref && p.ref !== source) {
+          if (Math.abs(p.ref.scrollTop - targetScrollTop) > 0.5) {
+            p.ref.scrollTop = targetScrollTop;
           }
-          if (p.id !== 'pane-middle' && Math.abs(p.scrollLeft - targetScrollLeft) > 0.5) {
-            p.scrollLeft = targetScrollLeft;
+          
+          // Sync horizontal scroll (left is RTL, center and right are LTR)
+          let targetLeft = normalizedScrollLeft;
+          if (p.key === 'left') {
+            targetLeft = -leftMax + normalizedScrollLeft;
+          }
+          
+          if (Math.abs(p.ref.scrollLeft - targetLeft) > 0.5) {
+            p.ref.scrollLeft = targetLeft;
           }
         }
       }
@@ -1094,6 +1121,14 @@ function App() {
         if (ref.current) {
           const rect = ref.current.getBoundingClientRect();
           ref.current.style.setProperty('--pane-x', `${rect.left}px`);
+          
+          // Set initial scroll offset custom property
+          const source = ref.current;
+          const isRtl = window.getComputedStyle(source).direction === 'rtl';
+          const scrollXVal = isRtl
+            ? source.scrollLeft + (source.scrollWidth - source.clientWidth)
+            : source.scrollLeft;
+          source.style.setProperty('--scroll-x', `${scrollXVal}px`);
         }
       });
       syncGutterOffsets();
@@ -1163,76 +1198,76 @@ function App() {
 
   // Display chunks: collapse equal chunks into context + separator + context
   const displayChunks = useMemo((): DisplayChunk[] => {
-    if (!collapseEnabled) {
-      return processedChunks.map(c => ({ ...c, display: 'lines' as const }));
-    }
-
     const result: DisplayChunk[] = [];
 
-    for (let i = 0; i < processedChunks.length; i++) {
-      const chunk = processedChunks[i];
-      const lineCount = Math.max(chunk.bLines.length, chunk.mLines.length);
+    if (!collapseEnabled) {
+      result.push(...processedChunks.map(c => ({ ...c, display: 'lines' as const })));
+    } else {
+      for (let i = 0; i < processedChunks.length; i++) {
+        const chunk = processedChunks[i];
+        const lineCount = Math.max(chunk.bLines.length, chunk.mLines.length);
 
-      if (chunk.type !== 'equal' || lineCount <= CONTEXT_LINES * 2) {
-        result.push({ ...chunk, display: 'lines' });
-        continue;
-      }
+        if (chunk.type !== 'equal' || lineCount <= CONTEXT_LINES * 2) {
+          result.push({ ...chunk, display: 'lines' });
+          continue;
+        }
 
-      const separatorId = `sep-${chunk.id}`;
-      const isExpanded = expandedSeparators.has(separatorId);
+        const separatorId = `sep-${chunk.id}`;
+        const isExpanded = expandedSeparators.has(separatorId);
 
-      if (isExpanded) {
-        result.push({ ...chunk, display: 'lines' });
-        continue;
-      }
+        if (isExpanded) {
+          result.push({ ...chunk, display: 'lines' });
+          continue;
+        }
 
-      const isFirst = i === 0;
-      const isLast = i === processedChunks.length - 1;
-      const ctxAbove = isFirst ? 0 : CONTEXT_LINES;
-      const ctxBelow = isLast ? 0 : CONTEXT_LINES;
-      const hiddenCount = lineCount - ctxAbove - ctxBelow;
+        const isFirst = i === 0;
+        const isLast = i === processedChunks.length - 1;
+        const ctxAbove = isFirst ? 0 : CONTEXT_LINES;
+        const ctxBelow = isLast ? 0 : CONTEXT_LINES;
+        const hiddenCount = lineCount - ctxAbove - ctxBelow;
 
-      if (hiddenCount <= 0) {
-        result.push({ ...chunk, display: 'lines' });
-        continue;
-      }
+        if (hiddenCount <= 0) {
+          result.push({ ...chunk, display: 'lines' });
+          continue;
+        }
 
-      // Context above (trailing lines adjacent to previous change)
-      if (ctxAbove > 0) {
+        // Context above (trailing lines adjacent to previous change)
+        if (ctxAbove > 0) {
+          result.push({
+            ...chunk,
+            bIdxs: chunk.bIdxs.slice(0, ctxAbove),
+            bLines: chunk.bLines.slice(0, ctxAbove),
+            mIdxs: chunk.mIdxs.slice(0, ctxAbove),
+            mLines: chunk.mLines.slice(0, ctxAbove),
+            tIdxs: chunk.tIdxs.slice(0, ctxAbove),
+            tLines: chunk.tLines.slice(0, ctxAbove),
+            resLines: chunk.resLines.slice(0, ctxAbove),
+            display: 'lines',
+          });
+        }
+
+        // Collapsed separator
         result.push({
-          ...chunk,
-          bIdxs: chunk.bIdxs.slice(0, ctxAbove),
-          bLines: chunk.bLines.slice(0, ctxAbove),
-          mIdxs: chunk.mIdxs.slice(0, ctxAbove),
-          mLines: chunk.mLines.slice(0, ctxAbove),
-          tIdxs: chunk.tIdxs.slice(0, ctxAbove),
-          tLines: chunk.tLines.slice(0, ctxAbove),
-          resLines: chunk.resLines.slice(0, ctxAbove),
-          display: 'lines',
+          display: 'separator',
+          separatorId,
+          hiddenCount,
+          chunkId: chunk.id,
         });
-      }
 
-      // Collapsed separator
-      result.push({
-        display: 'separator',
-        separatorId,
-        hiddenCount,
-        chunkId: chunk.id,
-      });
-
-      // Context below (leading lines adjacent to next change)
-      if (ctxBelow > 0) {
-        result.push({
-          ...chunk,
-          bIdxs: chunk.bIdxs.slice(-ctxBelow),
-          bLines: chunk.bLines.slice(-ctxBelow),
-          mIdxs: chunk.mIdxs.slice(-ctxBelow),
-          mLines: chunk.mLines.slice(-ctxBelow),
-          tIdxs: chunk.tIdxs.slice(-ctxBelow),
-          tLines: chunk.tLines.slice(-ctxBelow),
-          resLines: chunk.resLines.slice(-ctxBelow),
-          display: 'lines',
-        });
+        // Context below (leading lines adjacent to next change)
+        if (ctxBelow > 0) {
+          result.push({
+            ...chunk,
+            bIdxs: chunk.bIdxs.slice(-ctxBelow),
+            bLines: chunk.bLines.slice(-ctxBelow),
+            mIdxs: chunk.mIdxs.slice(-ctxBelow),
+            mLines: chunk.mLines.slice(-ctxBelow),
+            tIdxs: chunk.tIdxs.slice(-ctxBelow),
+            tLines: chunk.tLines.slice(-ctxBelow),
+            resLines: chunk.resLines.slice(-ctxBelow),
+            display: 'lines',
+          });
+        }
       }
     }
 

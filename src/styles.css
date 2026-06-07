@@ -689,7 +689,7 @@ button {
     url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%235f6164" stroke-width="0.8"/></svg>');
   background-repeat: repeat-x;
   background-position: 
-    calc(-1 * var(--pane-x, 0px)) center;
+    left calc(0px - var(--pane-x, 0px) + var(--scroll-x, 0px)) center;
   background-size: auto 6px;
   background-color: transparent;
   transition: background-color 0.15s;
@@ -702,7 +702,7 @@ button {
     linear-gradient(to right, #313335 48px, transparent 48px);
   background-repeat: repeat-x, no-repeat;
   background-position: 
-    calc(100% - var(--pane-x, 0px)) center,
+    left calc(0px - var(--pane-x, 0px) + var(--scroll-x, 0px)) center,
     left top;
   background-size: auto 6px, 100% 100%;
 }
@@ -713,7 +713,7 @@ button {
     linear-gradient(to right, #313335 48px, transparent 48px);
   background-repeat: repeat-x, no-repeat;
   background-position: 
-    calc(0% - var(--pane-x, 0px)) center,
+    left calc(0px - var(--pane-x, 0px) + var(--scroll-x, 0px)) center,
     left top;
   background-size: auto 6px, 100% 100%;
 }
@@ -743,6 +743,9 @@ button {
   background-image: 
     url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%23808285" stroke-width="1.6"/></svg>'),
     linear-gradient(to right, #313335 48px, transparent 48px);
+  background-position: 
+    left calc(0px - var(--pane-x, 0px) + var(--scroll-x, 0px)) center,
+    left top;
 }
 
 .separator-line {
