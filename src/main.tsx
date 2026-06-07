@@ -899,8 +899,8 @@ function App() {
     const yl = localLeftY - minY;
     const yr = localRightY - minY;
 
-    // Use wavy lines in the Left line number zone (0 to 60px) and Right line number zone (120px to 180px)
-    // with a smooth Bezier transition curve in the center (60px to 120px) to match JetBrains editor waves
+    // Use wavy lines in the Left line number zone (0 to 50px) and Right line number zone (70px to 120px)
+    // with a smooth Bezier transition curve in the center (50px to 70px) to match JetBrains editor waves
     const centerPath = `M 0 ${yl + 8} ` +
       `C 4 ${yl + 8}, 4 ${yl + 12}, 8 ${yl + 12} ` +
       `S 12 ${yl + 8}, 16 ${yl + 8} ` +
@@ -908,17 +908,13 @@ function App() {
       `S 28 ${yl + 8}, 32 ${yl + 8} ` +
       `C 36 ${yl + 8}, 36 ${yl + 12}, 40 ${yl + 12} ` +
       `S 44 ${yl + 8}, 48 ${yl + 8} ` +
-      `C 52 ${yl + 8}, 52 ${yl + 12}, 56 ${yl + 12} ` +
-      `S 60 ${yl + 8}, 64 ${yl + 8} ` +
-      `C 90 ${yl + 8}, 90 ${yr + 8}, 116 ${yr + 8} ` +
-      `C 120 ${yr + 8}, 120 ${yr + 12}, 124 ${yr + 12} ` +
-      `S 128 ${yr + 8}, 132 ${yr + 8} ` +
-      `C 136 ${yr + 8}, 136 ${yr + 12}, 140 ${yr + 12} ` +
-      `S 144 ${yr + 8}, 148 ${yr + 8} ` +
-      `C 152 ${yr + 8}, 152 ${yr + 12}, 156 ${yr + 12} ` +
-      `S 160 ${yr + 8}, 164 ${yr + 8} ` +
-      `C 168 ${yr + 8}, 168 ${yr + 12}, 172 ${yr + 12} ` +
-      `S 176 ${yr + 8}, 180 ${yr + 8}`;
+      `C 60 ${yl + 8}, 60 ${yr + 8}, 72 ${yr + 8} ` +
+      `C 76 ${yr + 8}, 76 ${yr + 12}, 80 ${yr + 12} ` +
+      `S 84 ${yr + 8}, 88 ${yr + 8} ` +
+      `C 92 ${yr + 8}, 92 ${yr + 12}, 96 ${yr + 12} ` +
+      `S 100 ${yr + 8}, 104 ${yr + 8} ` +
+      `C 108 ${yr + 8}, 108 ${yr + 12}, 112 ${yr + 12} ` +
+      `S 116 ${yr + 8}, 120 ${yr + 8}`;
 
     return { localLeftY, localRightY, minY, svgHeight, centerPath };
   };
@@ -948,7 +944,7 @@ function App() {
       const shiftY = rightY - middleY - scrollDiff;
       const rightTopLocal = shiftY;
       const rightBottomLocal = rightHeight + shiftY;
-      const svgWidth = 60;
+      const svgWidth = 20;
 
       const fillPath = `M 0 0 C ${svgWidth / 2} 0, ${svgWidth / 2} ${rightTopLocal}, ${svgWidth} ${rightTopLocal} L ${svgWidth} ${rightBottomLocal} C ${svgWidth / 2} ${rightBottomLocal}, ${svgWidth / 2} ${leftHeight}, 0 ${leftHeight} Z`;
 
@@ -1376,7 +1372,7 @@ function App() {
               position: 'absolute',
               left: 0,
               top: `${minY}px`,
-              width: 180,
+              width: 120,
               height: svgHeight,
               overflow: 'hidden',
               pointerEvents: 'none',
@@ -1691,7 +1687,7 @@ function App() {
                       if (chunk.type !== 'equal') {
                         const leftHeight = leftCount * 20;
                         const rightHeight = rightCount * 20;
-                        const svgWidth = 60;
+                        const svgWidth = 20;
                         const colors = connectorColors[chunk.type] || { fill: "rgba(56, 85, 112, 0.3)", stroke: "rgba(74, 136, 199, 0.6)" };
                         
                         // Calculate dynamic shiftY based on scroll offsets
@@ -1710,7 +1706,7 @@ function App() {
                             data-right-y={(chunk as any).rightY ?? 0}
                             style={{
                               position: 'absolute',
-                              left: 60,
+                              left: 50,
                               top: 0,
                               width: svgWidth,
                               height: Math.max(leftHeight, rightHeight),
@@ -1751,7 +1747,7 @@ function App() {
                               position: 'absolute',
                               left: 0,
                               top: 0,
-                              width: 60,
+                              width: 50,
                               height: leftHeight,
                               transform: `translateY(${leftShift}px)`,
                               willChange: 'transform'
@@ -1798,9 +1794,9 @@ function App() {
                             data-middle-y={(chunk as any).middleY ?? 0}
                             style={{
                               position: 'absolute',
-                              left: 120,
+                              left: 70,
                               top: 0,
-                              width: 60,
+                              width: 50,
                               height: rightHeight,
                               transform: `translateY(${rightShift}px)`,
                               willChange: 'transform'
