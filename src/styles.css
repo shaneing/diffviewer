@@ -764,7 +764,7 @@ button {
     url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%235f6164" stroke-width="0.8"/></svg>');
   background-repeat: repeat-x;
   background-position: 
-    calc(100% - var(--pane-x, 0px)) center;
+    right center;
   background-size: auto 6px;
   position: sticky;
   right: 0;
@@ -777,7 +777,7 @@ button {
     url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%235f6164" stroke-width="0.8"/></svg>');
   background-repeat: repeat-x;
   background-position: 
-    calc(0% - var(--pane-x, 0px)) center;
+    left center;
   background-size: auto 6px;
   position: sticky;
   left: 0;
