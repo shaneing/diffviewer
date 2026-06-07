@@ -973,12 +973,18 @@ function App() {
         middleScroll
       );
 
+      sepEl.style.transform = `translateY(${minY}px)`;
+      sepEl.style.height = `${svgHeight}px`;
+      sepEl.style.marginBottom = `${20 - svgHeight}px`;
+
       const svgEl = sepEl.querySelector('.separator-svg-connector') as SVGSVGElement | null;
       if (svgEl) {
-        svgEl.style.top = `${minY}px`;
+        svgEl.style.top = '0px';
         svgEl.style.height = `${svgHeight}px`;
         const centerEl = svgEl.querySelector('.center-path');
         if (centerEl) centerEl.setAttribute('d', centerPath);
+        const hitTestEl = svgEl.querySelector('.hit-test-path');
+        if (hitTestEl) hitTestEl.setAttribute('d', centerPath);
       }
     });
 
@@ -1360,7 +1366,15 @@ function App() {
           onClick={() => handleExpandSeparator(item.separatorId)}
           onMouseEnter={() => handleSeparatorMouseEnter(item.separatorId)}
           onMouseLeave={() => handleSeparatorMouseLeave(item.separatorId)}
-          style={{ position: 'relative', zIndex: 10, transformStyle: 'preserve-3d' }}
+          style={{
+            position: 'relative',
+            zIndex: 10,
+            transformStyle: 'preserve-3d',
+            transform: `translateY(${minY}px)`,
+            height: svgHeight,
+            marginBottom: 20 - svgHeight,
+            pointerEvents: 'none'
+          }}
           data-left-y={leftY}
           data-right-y={rightY}
           data-middle-y={middleY}
@@ -1371,7 +1385,7 @@ function App() {
             style={{
               position: 'absolute',
               left: 0,
-              top: `${minY}px`,
+              top: 0,
               width: 120,
               height: svgHeight,
               overflow: 'hidden',
@@ -1380,7 +1394,17 @@ function App() {
               transform: 'translateZ(0)'
             }}
           >
-            <path className="center-path" d={centerPath} stroke="#5f6164" strokeWidth={0.8} fill="none" />
+            <path className="center-path" d={centerPath} stroke="#5f6164" strokeWidth={0.8} fill="none" style={{ pointerEvents: 'none' }} />
+            <path
+              className="hit-test-path"
+              d={centerPath}
+              stroke="transparent"
+              strokeWidth={20}
+              fill="none"
+              style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+            >
+              <title>{`Expand ${item.hiddenCount} unchanged lines`}</title>
+            </path>
           </svg>
         </div>
       );

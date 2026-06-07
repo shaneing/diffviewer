@@ -696,7 +696,7 @@ button {
 }
 
 /* Code panes have line numbers, so we color the left 48px with the line-number column background */
-.pane-wrapper:first-child .collapsed-separator {
+:not(.view-2way) > .pane-wrapper:first-child .collapsed-separator {
   background-image: 
     url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%235f6164" stroke-width="0.8"/></svg>'),
     linear-gradient(to right, #313335 48px, transparent 48px);
@@ -707,7 +707,19 @@ button {
   background-size: auto 6px, 100% 100%;
 }
 
-.pane-wrapper:last-child .collapsed-separator {
+:not(.view-2way) > .pane-wrapper:last-child .collapsed-separator {
+  background-image: 
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%235f6164" stroke-width="0.8"/></svg>'),
+    linear-gradient(to right, #313335 48px, transparent 48px);
+  background-repeat: repeat-x, no-repeat;
+  background-position: 
+    left calc(0px - var(--pane-x, 0px) + var(--scroll-x, 0px)) center,
+    left top;
+  background-size: auto 6px, 100% 100%;
+}
+
+/* 3-way center pane separator: mask the 48px line-number column */
+:not(.view-2way) > .pane-wrapper:not(:first-child):not(:last-child) .collapsed-separator {
   background-image: 
     url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%235f6164" stroke-width="0.8"/></svg>'),
     linear-gradient(to right, #313335 48px, transparent 48px);
@@ -725,21 +737,27 @@ button {
 }
 
 
-.collapsed-separator.hovered .separator-svg-connector path {
+.collapsed-separator.hovered .separator-svg-connector .center-path {
   stroke: #808285 !important;
   stroke-width: 1.6 !important;
 }
 
 /* Wavy lines color hover synchronization in 2-way code panes */
-.view-2way .pane-wrapper:first-child .collapsed-separator.hovered,
+.view-2way .pane-wrapper:first-child .collapsed-separator.hovered {
+  background-image: 
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%23808285" stroke-width="1.6"/></svg>');
+  background-position: right center;
+}
 .view-2way .pane-wrapper:last-child .collapsed-separator.hovered {
   background-image: 
     url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%23808285" stroke-width="1.6"/></svg>');
+  background-position: left center;
 }
 
 /* Wavy lines color hover synchronization in 1-way and 3-way code panes */
-.pane-wrapper:first-child .collapsed-separator.hovered,
-.pane-wrapper:last-child .collapsed-separator.hovered {
+:not(.view-2way) > .pane-wrapper:first-child .collapsed-separator.hovered,
+:not(.view-2way) > .pane-wrapper:last-child .collapsed-separator.hovered,
+:not(.view-2way) > .pane-wrapper:not(:first-child):not(:last-child) .collapsed-separator.hovered {
   background-image: 
     url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%23808285" stroke-width="1.6"/></svg>'),
     linear-gradient(to right, #313335 48px, transparent 48px);
