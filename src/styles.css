@@ -396,7 +396,7 @@ button {
 
 /* Middle gutter in 2-way */
 .pane-wrapper.middle-gutter {
-  flex: 0 0 32px;
+  flex: 0 0 180px;
   background: #2b2b2b;
 }
 
@@ -441,6 +441,7 @@ button {
 /* Line Rows */
 .line-row {
   display: flex;
+  align-items: center;
   height: 20px;
   line-height: 20px;
   min-width: max-content;
@@ -457,6 +458,8 @@ button {
   border-right: 1px solid #555;
   user-select: none;
   flex-shrink: 0;
+  font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+  line-height: 20px;
 }
 
 .line-code {
@@ -466,40 +469,58 @@ button {
   font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
   font-size: 13px;
   white-space: pre;
+  line-height: 20px;
+  margin: 0;
 }
 
-/* Diagonal hash fillers */
+/* Clean solid fillers */
 .empty-bg {
-  background: repeating-linear-gradient(
-    45deg, 
-    transparent, 
-    transparent 5px, 
-    rgba(255, 255, 255, 0.04) 5px, 
-    rgba(255, 255, 255, 0.04) 10px
-  );
+  background: transparent;
 }
 
-/* Chunk blocks background tints */
+/* Chunk blocks background tints on rows and columns */
 .chunk-block {
-  border-bottom: 1px solid transparent;
+  border-bottom: none;
 }
-.chunk-block.equal {
-  background-color: transparent;
+
+.line-row.mine_only,
+.line-row.theirs_only,
+.line-row.identical_change,
+.line-row.modified,
+.gutter-line-num.mine_only,
+.gutter-line-num.theirs_only,
+.gutter-line-num.identical_change,
+.gutter-line-num.modified,
+.gutter-action-wrapper.mine_only,
+.gutter-action-wrapper.theirs_only,
+.gutter-action-wrapper.identical_change,
+.gutter-action-wrapper.modified,
+.diff-spacer.mine_only,
+.diff-spacer.theirs_only,
+.diff-spacer.identical_change,
+.diff-spacer.modified {
+  background-color: rgba(56, 85, 112, 0.4) !important;
 }
-.chunk-block.mine_only,
-.chunk-block.theirs_only,
-.chunk-block.identical_change,
-.chunk-block.modified {
-  background-color: rgba(56, 85, 112, 0.4);
+
+.line-row.added,
+.gutter-line-num.added,
+.gutter-action-wrapper.added,
+.diff-spacer.added {
+  background-color: rgba(41, 68, 54, 0.6) !important;
 }
-.chunk-block.added {
-  background-color: rgba(41, 68, 54, 0.6);
+
+.line-row.deleted,
+.gutter-line-num.deleted,
+.gutter-action-wrapper.deleted,
+.diff-spacer.deleted {
+  background-color: rgba(72, 74, 74, 0.4) !important;
 }
-.chunk-block.deleted {
-  background-color: rgba(72, 74, 74, 0.4);
-}
-.chunk-block.conflict {
-  background-color: rgba(92, 51, 51, 0.6);
+
+.line-row.conflict,
+.gutter-line-num.conflict,
+.gutter-action-wrapper.conflict,
+.diff-spacer.conflict {
+  background-color: rgba(92, 51, 51, 0.6) !important;
 }
 
 /* Gutter change markers */
@@ -657,3 +678,273 @@ button {
 ::-webkit-scrollbar-thumb:hover {
   background: #6b6b6b;
 }
+
+/* Collapsed Separator */
+.collapsed-separator {
+  display: block;
+  height: 20px;
+  cursor: pointer;
+  user-select: none;
+  background-image: 
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%235f6164" stroke-width="0.8"/></svg>');
+  background-repeat: repeat-x;
+  background-position: 
+    calc(-1 * var(--pane-x, 0px)) center;
+  background-size: auto 6px;
+  background-color: transparent;
+  transition: background-color 0.15s;
+}
+
+/* Code panes have line numbers, so we color the left 48px with the line-number column background */
+.pane-wrapper:first-child .collapsed-separator {
+  background-image: 
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%235f6164" stroke-width="0.8"/></svg>'),
+    linear-gradient(to right, #313335 48px, transparent 48px);
+  background-repeat: repeat-x, no-repeat;
+  background-position: 
+    calc(100% - var(--pane-x, 0px)) center,
+    left top;
+  background-size: auto 6px, 100% 100%;
+}
+
+.pane-wrapper:last-child .collapsed-separator {
+  background-image: 
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%235f6164" stroke-width="0.8"/></svg>'),
+    linear-gradient(to right, #313335 48px, transparent 48px);
+  background-repeat: repeat-x, no-repeat;
+  background-position: 
+    calc(0% - var(--pane-x, 0px)) center,
+    left top;
+  background-size: auto 6px, 100% 100%;
+}
+
+.collapsed-separator:hover,
+.collapsed-separator.hovered {
+  /* Remove background-color hover block, we just bold the wave now */
+  background-color: transparent !important;
+}
+
+
+.collapsed-separator.hovered .separator-svg-connector path {
+  stroke: #808285 !important;
+  stroke-width: 1.6 !important;
+}
+
+/* Wavy lines color hover synchronization in 2-way code panes */
+.view-2way .pane-wrapper:first-child .collapsed-separator.hovered,
+.view-2way .pane-wrapper:last-child .collapsed-separator.hovered {
+  background-image: 
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%23808285" stroke-width="1.6"/></svg>');
+}
+
+/* Wavy lines color hover synchronization in 1-way and 3-way code panes */
+.pane-wrapper:first-child .collapsed-separator.hovered,
+.pane-wrapper:last-child .collapsed-separator.hovered {
+  background-image: 
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%23808285" stroke-width="1.6"/></svg>'),
+    linear-gradient(to right, #313335 48px, transparent 48px);
+}
+
+.separator-line {
+  display: none;
+}
+
+.separator-label {
+  display: none;
+}
+
+/* Toggle button active state */
+.action-btn.active-toggle {
+  color: #4a88c7;
+}
+
+/* View 2way overrides for separator line background (removes grey 48px line-num strip) */
+.view-2way .pane-wrapper:first-child .collapsed-separator {
+  background-image: 
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%235f6164" stroke-width="0.8"/></svg>');
+  background-repeat: repeat-x;
+  background-position: 
+    calc(100% - var(--pane-x, 0px)) center;
+  background-size: auto 6px;
+  position: sticky;
+  right: 0;
+  width: 100%;
+  z-index: 10;
+}
+
+.view-2way .pane-wrapper:last-child .collapsed-separator {
+  background-image: 
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="6"><path d="M 0 1 C 4 1, 4 5, 8 5 S 12 1, 16 1" fill="none" stroke="%235f6164" stroke-width="0.8"/></svg>');
+  background-repeat: repeat-x;
+  background-position: 
+    calc(0% - var(--pane-x, 0px)) center;
+  background-size: auto 6px;
+  position: sticky;
+  left: 0;
+  width: 100%;
+  z-index: 10;
+}
+
+
+/* Unified Middle Gutter Row & Column Styles */
+.gutter-row {
+  display: flex;
+  height: 20px;
+  line-height: 20px;
+  position: relative;
+  background-color: transparent;
+  user-select: none;
+}
+
+.gutter-line-num {
+  width: 40px;
+  min-width: 40px;
+  color: #606366;
+  font-size: 12px;
+  padding: 0 6px;
+  font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+  box-sizing: border-box;
+  line-height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gutter-line-num.left {
+  border-right: 1px solid #1e1e1e;
+  background-color: #313335;
+}
+
+.gutter-line-num.right {
+  border-left: 1px solid #1e1e1e;
+  background-color: #313335;
+}
+
+.gutter-action-wrapper {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #313335;
+  box-sizing: border-box;
+}
+
+.gutter-action-wrapper.left {
+  border-right: 1px solid #1e1e1e;
+}
+
+.gutter-action-wrapper.right {
+  border-left: 1px solid #1e1e1e;
+}
+
+/* Action button for Accept (» or «) */
+.gutter-action {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.gutter-action:hover {
+  background: #2f65ca;
+  color: #fff;
+}
+
+/* Status indicator (green checkmark) */
+.gutter-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #5c9f50;
+  width: 100%;
+  height: 100%;
+}
+
+.jetbrains-checkmark {
+  color: #5c9f50;
+}
+
+.gutter-connector-spacer {
+  width: 60px;
+  min-width: 60px;
+  height: 20px;
+  position: relative;
+}
+
+
+
+/* Spacer block representing missing lines in scroll-synced layouts */
+.diff-spacer {
+  background-color: transparent;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Ensure the line-number column background is continuous in 1-way and 3-way views */
+.pane-wrapper:not(.middle-gutter) .diff-spacer {
+  background-image: linear-gradient(to right, #313335 48px, transparent 48px);
+}
+
+/* Override for 2-way view where line numbers are removed from the code panes */
+.view-2way .pane-wrapper:not(.middle-gutter) .diff-spacer {
+  background-image: none;
+}
+
+/* Disable background waves in 2-way middle gutter separator to use SVG paths instead */
+.view-2way .pane-wrapper.middle-gutter .collapsed-separator {
+  background-image: none !important;
+}
+
+/* SVG connector path hardware layer promotion */
+.separator-svg-connector {
+  will-change: transform;
+}
+
+
+
+/* Independent translating gutter columns for scroll synchronization */
+.gutter-column {
+  will-change: transform;
+}
+
+.gutter-row-side {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  line-height: 20px;
+  user-select: none;
+  background-color: transparent;
+}
+
+.gutter-row-side.left {
+  width: 60px;
+}
+
+.gutter-row-side.right {
+  width: 60px;
+}
+
+/* Prevent direct user scrolling on the 2-way middle gutter */
+#pane-middle {
+  overflow: hidden !important;
+}
+
+/* Position the vertical scrollbar of the Left Pane on its left edge */
+.diff-grid > .pane-wrapper:first-child > .pane-content {
+  direction: rtl;
+}
+
+.diff-grid > .pane-wrapper:first-child > .pane-content > * {
+  direction: ltr;
+}
+

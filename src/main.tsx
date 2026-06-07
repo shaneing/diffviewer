@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { invoke } from "@tauri-apps/api/core";
+
 import { 
-  GitBranch, Folder, File, ChevronRight, ChevronDown, Check, ArrowUp, RefreshCw, AlertTriangle 
+  GitBranch, Folder, File, ChevronRight, ChevronLeft, ChevronDown, Check, ArrowUp, RefreshCw, AlertTriangle,
+  ChevronsDownUp, ChevronsUpDown
 } from "lucide-react";
 import "./styles.css";
 
@@ -64,6 +66,19 @@ interface DiffChunk {
   resultWordDiff: number[];
   resIdxStart?: number;
 }
+
+type DisplayChunk =
+  | (DiffChunk & { display: 'lines' })
+  | { display: 'separator'; separatorId: string; hiddenCount: number; chunkId: number };
+
+const CONTEXT_LINES = 3;
+
+const connectorColors: Record<string, { fill: string; stroke: string }> = {
+  modified: { fill: "rgba(56, 85, 112, 0.3)", stroke: "rgba(74, 136, 199, 0.6)" },
+  added: { fill: "rgba(41, 68, 54, 0.4)", stroke: "rgba(92, 159, 80, 0.6)" },
+  deleted: { fill: "rgba(72, 74, 74, 0.3)", stroke: "rgba(107, 107, 107, 0.6)" },
+  conflict: { fill: "rgba(92, 51, 51, 0.4)", stroke: "rgba(255, 107, 104, 0.6)" },
+};
 
 const statusLabel: Record<FileStatus, string> = {
   modified: "M",
@@ -618,11 +633,20 @@ function App() {
   // Aligned diff chunks
   const [processedChunks, setProcessedChunks] = useState<DiffChunk[]>([]);
 
+  // Collapse unchanged fragments
+  const [collapseEnabled, setCollapseEnabled] = useState(true);
+  const [expandedSeparators, setExpandedSeparators] = useState<Set<string>>(new Set());
+
   // Open tabs state
   const [openTabs, setOpenTabs] = useState<string[]>([]);
 
+  // Scroll position refs for real-time SVG connectors and separators updates in 2-way spacer-less view
+  const scrollTopLeftRef = useRef(0);
+  const scrollTopRightRef = useRef(0);
+
   // Sync scroll lock
   const isSyncing = useRef(false);
+  const activeScrollRef = useRef<string | null>(null);
   const leftRef = useRef<HTMLDivElement>(null);
   const middleRef = useRef<HTMLDivElement>(null);
   const centerRef = useRef<HTMLDivElement>(null);
@@ -810,29 +834,291 @@ function App() {
     }));
   };
 
+  // Helper for piecewise-linear scroll mapping in 2-way spacer-less view
+  const getMappedScrollTop = (
+    fromPane: 'left' | 'middle' | 'right',
+    toPane: 'left' | 'middle' | 'right',
+    scrollTop: number
+  ): number => {
+    if (displayChunks.length === 0) return scrollTop;
+    
+    let itemIndex = 0;
+    let accumFrom = 0;
+    
+    for (let i = 0; i < displayChunks.length; i++) {
+      const item = displayChunks[i] as any;
+      const hFrom = fromPane === 'left' ? (item.leftH ?? 0) : (fromPane === 'middle' ? (item.middleH ?? 0) : (item.rightH ?? 0));
+      if (scrollTop >= accumFrom && scrollTop <= accumFrom + hFrom) {
+        itemIndex = i;
+        break;
+      }
+      accumFrom += hFrom;
+      if (i === displayChunks.length - 1) {
+        itemIndex = i;
+      }
+    }
+    
+    const activeItem = displayChunks[itemIndex] as any;
+    const yFrom = fromPane === 'left' ? (activeItem.leftY ?? 0) : (fromPane === 'middle' ? (activeItem.middleY ?? 0) : (activeItem.rightY ?? 0));
+    const hFrom = fromPane === 'left' ? (activeItem.leftH ?? 0) : (fromPane === 'middle' ? (activeItem.middleH ?? 0) : (activeItem.rightH ?? 0));
+    const yTo = toPane === 'left' ? (activeItem.leftY ?? 0) : (toPane === 'middle' ? (activeItem.middleY ?? 0) : (activeItem.rightY ?? 0));
+    const hTo = toPane === 'left' ? (activeItem.leftH ?? 0) : (toPane === 'middle' ? (activeItem.middleH ?? 0) : (activeItem.rightH ?? 0));
+    
+    if (hFrom === 0) return yTo;
+    
+    const ratio = (scrollTop - yFrom) / hFrom;
+    return yTo + ratio * hTo;
+  };
+
+  // Mouse hover event synchronization for separators
+  const handleSeparatorMouseEnter = (id: string) => {
+    const els = document.querySelectorAll(`[data-separator-id="${id}"]`);
+    els.forEach(el => el.classList.add('hovered'));
+  };
+
+  const handleSeparatorMouseLeave = (id: string) => {
+    const els = document.querySelectorAll(`[data-separator-id="${id}"]`);
+    els.forEach(el => el.classList.remove('hovered'));
+  };
+
+  // Helper for computing separator coordinates and paths for both render and scroll sync
+  const getSeparatorCoords = (
+    leftY: number,
+    rightY: number,
+    middleY: number,
+    leftScroll: number,
+    rightScroll: number,
+    middleScroll: number
+  ) => {
+    const localLeftY = (leftY - leftScroll) - (middleY - middleScroll);
+    const localRightY = (rightY - rightScroll) - (middleY - middleScroll);
+
+    const minY = Math.min(localLeftY, localRightY);
+    const svgHeight = Math.max(25, Math.abs(localLeftY - localRightY) + 25);
+
+    const yl = localLeftY - minY;
+    const yr = localRightY - minY;
+
+    // Use wavy lines in the Left line number zone (0 to 60px) and Right line number zone (120px to 180px)
+    // with a smooth Bezier transition curve in the center (60px to 120px) to match JetBrains editor waves
+    const centerPath = `M 0 ${yl + 8} ` +
+      `C 4 ${yl + 8}, 4 ${yl + 12}, 8 ${yl + 12} ` +
+      `S 12 ${yl + 8}, 16 ${yl + 8} ` +
+      `C 20 ${yl + 8}, 20 ${yl + 12}, 24 ${yl + 12} ` +
+      `S 28 ${yl + 8}, 32 ${yl + 8} ` +
+      `C 36 ${yl + 8}, 36 ${yl + 12}, 40 ${yl + 12} ` +
+      `S 44 ${yl + 8}, 48 ${yl + 8} ` +
+      `C 52 ${yl + 8}, 52 ${yl + 12}, 56 ${yl + 12} ` +
+      `S 60 ${yl + 8}, 64 ${yl + 8} ` +
+      `C 90 ${yl + 8}, 90 ${yr + 8}, 116 ${yr + 8} ` +
+      `C 120 ${yr + 8}, 120 ${yr + 12}, 124 ${yr + 12} ` +
+      `S 128 ${yr + 8}, 132 ${yr + 8} ` +
+      `C 136 ${yr + 8}, 136 ${yr + 12}, 140 ${yr + 12} ` +
+      `S 144 ${yr + 8}, 148 ${yr + 8} ` +
+      `C 152 ${yr + 8}, 152 ${yr + 12}, 156 ${yr + 12} ` +
+      `S 160 ${yr + 8}, 164 ${yr + 8} ` +
+      `C 168 ${yr + 8}, 168 ${yr + 12}, 172 ${yr + 12} ` +
+      `S 176 ${yr + 8}, 180 ${yr + 8}`;
+
+    return { localLeftY, localRightY, minY, svgHeight, centerPath };
+  };
+
+  // Helper to sync SVG curves and translation offsets in 2-way spacer-less view
+  const syncGutterOffsets = useCallback(() => {
+    if (viewMode !== "2way") return;
+
+    const leftScroll = leftRef.current ? leftRef.current.scrollTop : 0;
+    const rightScroll = rightRef.current ? rightRef.current.scrollTop : 0;
+    const middleScroll = middleRef.current ? middleRef.current.scrollTop : 0;
+
+    scrollTopLeftRef.current = leftScroll;
+    scrollTopRightRef.current = rightScroll;
+
+    const scrollDiff = rightScroll - leftScroll;
+
+    // Update change chunk connectors directly in DOM
+    const connectors = document.querySelectorAll('.gutter-svg-connector');
+    connectors.forEach((el) => {
+      const svgEl = el as SVGSVGElement;
+      const leftHeight = parseFloat(svgEl.getAttribute('data-left-height') || '0');
+      const rightHeight = parseFloat(svgEl.getAttribute('data-right-height') || '0');
+      const middleY = parseFloat(svgEl.getAttribute('data-middle-y') || '0');
+      const rightY = parseFloat(svgEl.getAttribute('data-right-y') || '0');
+
+      const shiftY = rightY - middleY - scrollDiff;
+      const rightTopLocal = shiftY;
+      const rightBottomLocal = rightHeight + shiftY;
+      const svgWidth = 60;
+
+      const fillPath = `M 0 0 L ${svgWidth} ${rightTopLocal} L ${svgWidth} ${rightBottomLocal} C ${svgWidth / 2} ${rightBottomLocal}, ${svgWidth / 2} ${leftHeight}, 0 ${leftHeight} Z`;
+      const topPath = `M 0 0 C ${svgWidth / 2} 0, ${svgWidth / 2} ${rightTopLocal}, ${svgWidth} ${rightTopLocal}`;
+      const bottomPath = `M ${svgWidth} ${rightBottomLocal} C ${svgWidth / 2} ${rightBottomLocal}, ${svgWidth / 2} ${leftHeight}, 0 ${leftHeight}`;
+
+      const fillEl = svgEl.querySelector('.fill-path');
+      const topEl = svgEl.querySelector('.top-path');
+      const bottomEl = svgEl.querySelector('.bottom-path');
+
+      if (fillEl) fillEl.setAttribute('d', fillPath);
+      if (topEl) topEl.setAttribute('d', topPath);
+      if (bottomEl) bottomEl.setAttribute('d', bottomPath);
+
+      const newSvgHeight = Math.max(leftHeight, rightHeight + Math.abs(shiftY));
+      svgEl.style.height = `${newSvgHeight}px`;
+    });
+
+    // Update separator wave curves directly in DOM
+    const separators = document.querySelectorAll('.gutter-separator');
+    separators.forEach((el) => {
+      const sepEl = el as HTMLElement;
+      const leftY = parseFloat(sepEl.getAttribute('data-left-y') || '0');
+      const rightY = parseFloat(sepEl.getAttribute('data-right-y') || '0');
+      const middleY = parseFloat(sepEl.getAttribute('data-middle-y') || '0');
+
+      const { minY, svgHeight, centerPath } = getSeparatorCoords(
+        leftY,
+        rightY,
+        middleY,
+        leftScroll,
+        rightScroll,
+        middleScroll
+      );
+
+      const svgEl = sepEl.querySelector('.separator-svg-connector') as SVGSVGElement | null;
+      if (svgEl) {
+        svgEl.style.top = `${minY}px`;
+        svgEl.style.height = `${svgHeight}px`;
+        const centerEl = svgEl.querySelector('.center-path');
+        if (centerEl) centerEl.setAttribute('d', centerPath);
+      }
+    });
+
+    // Update left and right gutter columns directly in DOM
+    const leftColumns = document.querySelectorAll('.gutter-column.left');
+    leftColumns.forEach((el) => {
+      const colEl = el as HTMLElement;
+      const leftY = parseFloat(colEl.getAttribute('data-left-y') || '0');
+      const middleY = parseFloat(colEl.getAttribute('data-middle-y') || '0');
+      
+      const shiftY = leftY - leftScroll - (middleY - middleScroll);
+      colEl.style.transform = `translateY(${shiftY}px)`;
+    });
+
+    const rightColumns = document.querySelectorAll('.gutter-column.right');
+    rightColumns.forEach((el) => {
+      const colEl = el as HTMLElement;
+      const rightY = parseFloat(colEl.getAttribute('data-right-y') || '0');
+      const middleY = parseFloat(colEl.getAttribute('data-middle-y') || '0');
+      
+      const shiftY = rightY - rightScroll - (middleY - middleScroll);
+      colEl.style.transform = `translateY(${shiftY}px)`;
+    });
+  }, [viewMode]);
+
   // Sync scroll
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const source = e.currentTarget;
+    
     if (isSyncing.current) return;
+    
+    // Detect which pane is actively being scrolled by the user using ref comparisons
+    let sourceKey = '';
+    if (source === leftRef.current) sourceKey = 'left';
+    else if (source === rightRef.current) sourceKey = 'right';
+    else if (source === middleRef.current) sourceKey = 'middle';
+    else if (source === centerRef.current) sourceKey = 'center';
+
+    // Only allow scrolling to synchronize if it originates from the hovered pane.
+    // This completely prevents infinite programmatic scroll event feedback loops.
+    if (activeScrollRef.current && activeScrollRef.current !== sourceKey) {
+      return;
+    }
+
     isSyncing.current = true;
     
     const targetScrollTop = source.scrollTop;
     const targetScrollLeft = source.scrollLeft;
     
-    const panes = [leftRef.current, middleRef.current, centerRef.current, rightRef.current];
-    for (const p of panes) {
-      if (p && p !== source) {
-        if (p.scrollTop !== targetScrollTop) {
-          p.scrollTop = targetScrollTop;
+    if (viewMode === "2way") {
+      const leftTarget = sourceKey === 'left' ? targetScrollTop : getMappedScrollTop(sourceKey as any, 'left', targetScrollTop);
+      const middleTarget = sourceKey === 'middle' ? targetScrollTop : getMappedScrollTop(sourceKey as any, 'middle', targetScrollTop);
+      const rightTarget = sourceKey === 'right' ? targetScrollTop : getMappedScrollTop(sourceKey as any, 'right', targetScrollTop);
+      
+      if (leftRef.current && leftRef.current !== source && Math.abs(leftRef.current.scrollTop - leftTarget) > 0.5) {
+        leftRef.current.scrollTop = leftTarget;
+      }
+      if (middleRef.current && middleRef.current !== source && Math.abs(middleRef.current.scrollTop - middleTarget) > 0.5) {
+        middleRef.current.scrollTop = middleTarget;
+      }
+      if (rightRef.current && rightRef.current !== source && Math.abs(rightRef.current.scrollTop - rightTarget) > 0.5) {
+        rightRef.current.scrollTop = rightTarget;
+      }
+      
+      // Sync horizontal scroll (left and right code panes only, middle has no horizontal scroll)
+      if (leftRef.current && rightRef.current) {
+        const leftMax = leftRef.current.scrollWidth - leftRef.current.clientWidth;
+        
+        if (source === leftRef.current) {
+          // Left (RTL, scrollLeft is negative/0) to Right (LTR, scrollLeft is positive)
+          const leftScrollLeft = leftRef.current.scrollLeft;
+          const targetRightScrollLeft = leftMax + leftScrollLeft;
+          if (Math.abs(rightRef.current.scrollLeft - targetRightScrollLeft) > 0.5) {
+            rightRef.current.scrollLeft = targetRightScrollLeft;
+          }
+        } else if (source === rightRef.current) {
+          // Right (LTR, scrollLeft is positive) to Left (RTL, scrollLeft is negative/0)
+          const rightScrollLeft = rightRef.current.scrollLeft;
+          const targetLeftScrollLeft = -leftMax + rightScrollLeft;
+          if (Math.abs(leftRef.current.scrollLeft - targetLeftScrollLeft) > 0.5) {
+            leftRef.current.scrollLeft = targetLeftScrollLeft;
+          }
         }
-        if (p.id !== 'pane-middle' && p.scrollLeft !== targetScrollLeft) {
-          p.scrollLeft = targetScrollLeft;
+      }
+
+      syncGutterOffsets();
+    } else {
+      // Original linear scroll sync for 1-way and 3-way
+      const panes = [leftRef.current, middleRef.current, centerRef.current, rightRef.current];
+      for (const p of panes) {
+        if (p && p !== source) {
+          if (Math.abs(p.scrollTop - targetScrollTop) > 0.5) {
+            p.scrollTop = targetScrollTop;
+          }
+          if (p.id !== 'pane-middle' && Math.abs(p.scrollLeft - targetScrollLeft) > 0.5) {
+            p.scrollLeft = targetScrollLeft;
+          }
         }
       }
     }
     
     isSyncing.current = false;
   };
+
+  // Sync pane offsets for global background alignment
+  useEffect(() => {
+    const syncPaneX = () => {
+      [leftRef, middleRef, centerRef, rightRef].forEach(ref => {
+        if (ref.current) {
+          const rect = ref.current.getBoundingClientRect();
+          ref.current.style.setProperty('--pane-x', `${rect.left}px`);
+        }
+      });
+      syncGutterOffsets();
+    };
+    
+    syncPaneX();
+    
+    const container = leftRef.current?.parentElement;
+    if (!container) return;
+    
+    const observer = new ResizeObserver(syncPaneX);
+    observer.observe(container);
+    window.addEventListener('resize', syncPaneX);
+    
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', syncPaneX);
+    };
+  }, [viewMode, selected, processedChunks, syncGutterOffsets]);
 
   // Click outside to close dropdowns
   useEffect(() => {
@@ -856,20 +1142,237 @@ function App() {
     }));
   };
 
-  // Dynamic merged center pane indices
-  const chunksWithStartIdx = useMemo(() => {
+  // Reset expanded separators and scroll refs when file changes
+  useEffect(() => {
+    setExpandedSeparators(new Set());
+    scrollTopLeftRef.current = 0;
+    scrollTopRightRef.current = 0;
+    if (leftRef.current) leftRef.current.scrollTop = 0;
+    if (rightRef.current) rightRef.current.scrollTop = 0;
+    if (middleRef.current) middleRef.current.scrollTop = 0;
+    if (centerRef.current) centerRef.current.scrollTop = 0;
+    setTimeout(() => {
+      if (leftRef.current) {
+        leftRef.current.scrollLeft = -leftRef.current.scrollWidth;
+      }
+    }, 50);
+  }, [selected]);
+
+  // Expand a collapsed separator
+  const handleExpandSeparator = (separatorId: string) => {
+    setExpandedSeparators(prev => {
+      const next = new Set(prev);
+      next.add(separatorId);
+      return next;
+    });
+  };
+
+  // Display chunks: collapse equal chunks into context + separator + context
+  const displayChunks = useMemo((): DisplayChunk[] => {
+    if (!collapseEnabled) {
+      return processedChunks.map(c => ({ ...c, display: 'lines' as const }));
+    }
+
+    const result: DisplayChunk[] = [];
+
+    for (let i = 0; i < processedChunks.length; i++) {
+      const chunk = processedChunks[i];
+      const lineCount = Math.max(chunk.bLines.length, chunk.mLines.length);
+
+      if (chunk.type !== 'equal' || lineCount <= CONTEXT_LINES * 2) {
+        result.push({ ...chunk, display: 'lines' });
+        continue;
+      }
+
+      const separatorId = `sep-${chunk.id}`;
+      const isExpanded = expandedSeparators.has(separatorId);
+
+      if (isExpanded) {
+        result.push({ ...chunk, display: 'lines' });
+        continue;
+      }
+
+      const isFirst = i === 0;
+      const isLast = i === processedChunks.length - 1;
+      const ctxAbove = isFirst ? 0 : CONTEXT_LINES;
+      const ctxBelow = isLast ? 0 : CONTEXT_LINES;
+      const hiddenCount = lineCount - ctxAbove - ctxBelow;
+
+      if (hiddenCount <= 0) {
+        result.push({ ...chunk, display: 'lines' });
+        continue;
+      }
+
+      // Context above (trailing lines adjacent to previous change)
+      if (ctxAbove > 0) {
+        result.push({
+          ...chunk,
+          bIdxs: chunk.bIdxs.slice(0, ctxAbove),
+          bLines: chunk.bLines.slice(0, ctxAbove),
+          mIdxs: chunk.mIdxs.slice(0, ctxAbove),
+          mLines: chunk.mLines.slice(0, ctxAbove),
+          tIdxs: chunk.tIdxs.slice(0, ctxAbove),
+          tLines: chunk.tLines.slice(0, ctxAbove),
+          resLines: chunk.resLines.slice(0, ctxAbove),
+          display: 'lines',
+        });
+      }
+
+      // Collapsed separator
+      result.push({
+        display: 'separator',
+        separatorId,
+        hiddenCount,
+        chunkId: chunk.id,
+      });
+
+      // Context below (leading lines adjacent to next change)
+      if (ctxBelow > 0) {
+        result.push({
+          ...chunk,
+          bIdxs: chunk.bIdxs.slice(-ctxBelow),
+          bLines: chunk.bLines.slice(-ctxBelow),
+          mIdxs: chunk.mIdxs.slice(-ctxBelow),
+          mLines: chunk.mLines.slice(-ctxBelow),
+          tIdxs: chunk.tIdxs.slice(-ctxBelow),
+          tLines: chunk.tLines.slice(-ctxBelow),
+          resLines: chunk.resLines.slice(-ctxBelow),
+          display: 'lines',
+        });
+      }
+    }
+
+    let leftY = 0;
+    let middleY = 0;
+    let rightY = 0;
+
+    return result.map(item => {
+      if (item.display === 'separator') {
+        const leftH = 20;
+        const middleH = 20;
+        const rightH = 20;
+        const enriched = {
+          ...item,
+          leftY,
+          middleY,
+          rightY,
+          leftH,
+          middleH,
+          rightH,
+        };
+        leftY += leftH;
+        middleY += middleH;
+        rightY += rightH;
+        return enriched;
+      } else {
+        const height = Math.max(item.bLines.length, item.mLines.length);
+        const leftH = (viewMode === "2way" ? item.bLines.length : height) * 20;
+        const middleH = height * 20;
+        const rightH = (viewMode === "2way" ? item.mLines.length : height) * 20;
+        const enriched = {
+          ...item,
+          leftY,
+          middleY,
+          rightY,
+          leftH,
+          middleH,
+          rightH,
+        };
+        leftY += leftH;
+        middleY += middleH;
+        rightY += rightH;
+        return enriched;
+      }
+    }) as any;
+  }, [processedChunks, collapseEnabled, expandedSeparators, viewMode]);
+
+  // Sync gutter offsets after rendering or layout shifts
+  useEffect(() => {
+    syncGutterOffsets();
+  }, [displayChunks, viewMode, syncGutterOffsets]);
+
+  // Dynamic merged center pane indices with collapse/separator support
+  const displayChunksWithStartIdx = useMemo(() => {
     let nextResIdx = 1;
-    return processedChunks.map(chunk => {
+    return displayChunks.map(item => {
+      if (item.display === 'separator') return item;
       const start = nextResIdx;
-      if (chunk.resLines) {
-        nextResIdx += chunk.resLines.length;
+      if (item.resLines) {
+        nextResIdx += item.resLines.length;
       }
       return {
-        ...chunk,
+        ...item,
         resIdxStart: start
       };
     });
-  }, [processedChunks]);
+  }, [displayChunks]);
+
+  // Separator component used by all panes
+  const renderSeparator = (item: any, pane: 'left' | 'middle' | 'right') => {
+    if (viewMode === "2way" && pane === 'middle') {
+      const leftY = item.leftY ?? 0;
+      const rightY = item.rightY ?? 0;
+      const middleY = item.middleY ?? 0;
+
+      const leftScroll = scrollTopLeftRef.current;
+      const rightScroll = scrollTopRightRef.current;
+      const middleScroll = middleRef.current ? middleRef.current.scrollTop : getMappedScrollTop('left', 'middle', leftScroll);
+
+      const { minY, svgHeight, centerPath } = getSeparatorCoords(
+        leftY,
+        rightY,
+        middleY,
+        leftScroll,
+        rightScroll,
+        middleScroll
+      );
+
+      return (
+        <div
+          key={item.separatorId}
+          className="collapsed-separator gutter-separator"
+          data-separator-id={item.separatorId}
+          onClick={() => handleExpandSeparator(item.separatorId)}
+          onMouseEnter={() => handleSeparatorMouseEnter(item.separatorId)}
+          onMouseLeave={() => handleSeparatorMouseLeave(item.separatorId)}
+          style={{ position: 'relative', zIndex: 10, transformStyle: 'preserve-3d' }}
+          data-left-y={leftY}
+          data-right-y={rightY}
+          data-middle-y={middleY}
+          title={`Expand ${item.hiddenCount} unchanged lines`}
+        >
+          <svg
+            className="separator-svg-connector"
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: `${minY}px`,
+              width: 180,
+              height: svgHeight,
+              overflow: 'hidden',
+              pointerEvents: 'none',
+              zIndex: 10,
+              transform: 'translateZ(0)'
+            }}
+          >
+            <path className="center-path" d={centerPath} stroke="#5f6164" strokeWidth={0.8} fill="none" />
+          </svg>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        key={item.separatorId}
+        className="collapsed-separator"
+        data-separator-id={item.separatorId}
+        onClick={() => handleExpandSeparator(item.separatorId)}
+        onMouseEnter={() => handleSeparatorMouseEnter(item.separatorId)}
+        onMouseLeave={() => handleSeparatorMouseLeave(item.separatorId)}
+      >
+      </div>
+    );
+  };
 
   return (
     <main className="app-shell">
@@ -962,6 +1465,17 @@ function App() {
           </div>
         </div>
 
+        <div className="toolbar-right">
+          <button 
+            type="button" 
+            className={`action-btn ${collapseEnabled ? "active-toggle" : ""}`}
+            title="Collapse Unchanged Fragments"
+            onClick={() => setCollapseEnabled(prev => !prev)}
+          >
+            {collapseEnabled ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
+          </button>
+        </div>
+
       </header>
 
       <section className="workspace">
@@ -1020,7 +1534,7 @@ function App() {
           </div>
 
           {diff ? (
-            <div className="diff-grid">
+            <div className={`diff-grid ${viewMode === "2way" ? "view-2way" : ""}`}>
               {/* PANE LEFT: 1-way (Editor), 2-way (Base), 3-way (Ours) */}
               <div className="pane-wrapper">
                 <div className="pane-header">
@@ -1038,10 +1552,12 @@ function App() {
                     </>
                   )}
                 </div>
-                <div className="pane-content" ref={leftRef} onScroll={handleScroll}>
+                <div className="pane-content" ref={leftRef} onScroll={handleScroll} onMouseEnter={() => { activeScrollRef.current = 'left'; }}>
                   {viewMode === "1way" ? (
                     // --- 1-WAY PANE ---
-                    processedChunks.map((chunk) => {
+                    displayChunks.map((item) => {
+                      if (item.display === 'separator') return renderSeparator(item, 'left');
+                      const chunk = item;
                       let markerClass = "";
                       if (chunk.type !== 'equal') {
                         if (chunk.type === 'conflict') markerClass = 'marker-conflict';
@@ -1079,54 +1595,50 @@ function App() {
                     })
                   ) : viewMode === "2way" ? (
                     // --- 2-WAY LEFT PANE ---
-                    processedChunks.map((chunk) => {
+                    displayChunks.map((item) => {
+                      if (item.display === 'separator') return renderSeparator(item, 'left');
+                      const chunk = item;
                       const height = Math.max(chunk.bLines.length, chunk.mLines.length);
                       return (
                         <div key={chunk.id} className={`chunk-block ${chunk.type}`}>
-                          {Array.from({ length: height }).map((_, i) => {
-                            const hasLine = i < chunk.bLines.length;
-                            const lineText = hasLine ? chunk.bLines[i] : "";
-                            const lineNum = hasLine ? chunk.bIdxs[i] + 1 : "";
-                            const isEmpty = !hasLine;
-                            return (
-                              <div key={i} className="line-row">
-                                <span className={`line-num ${isEmpty ? "empty-bg" : ""}`}>{lineNum}</span>
-                                <code className={`line-code ${isEmpty ? "empty-bg" : ""}`}>
-                                  {hasLine ? renderLineHtml(lineText, extension) : ""}
-                                </code>
-                              </div>
-                            );
-                          })}
+                          {chunk.bLines.map((lineText, i) => (
+                            <div key={i} className={`line-row ${chunk.type}`}>
+                              <code className="line-code">
+                                {renderLineHtml(lineText, extension)}
+                              </code>
+                            </div>
+                          ))}
+                           {viewMode !== "2way" && height > chunk.bLines.length && (
+                             <div className={`diff-spacer ${chunk.type}`} style={{ height: (height - chunk.bLines.length) * 20 }} />
+                           )}
                         </div>
                       );
                     })
                   ) : (
                     // --- 3-WAY LEFT PANE ---
-                    processedChunks.map((chunk) => {
+                    displayChunks.map((item) => {
+                      if (item.display === 'separator') return renderSeparator(item, 'left');
+                      const chunk = item;
                       const height = Math.max(chunk.mLines.length, chunk.resLines.length, chunk.tLines.length);
                       let charOffset = 0;
                       return (
                         <div key={chunk.id} className={`chunk-block ${chunk.type}`}>
-                          {Array.from({ length: height }).map((_, i) => {
-                            const hasLine = i < chunk.mLines.length;
-                            const lineText = hasLine ? chunk.mLines[i] : "";
-                            const lineNum = hasLine ? chunk.mIdxs[i] + 1 : "";
-                            const isEmpty = !hasLine;
-                            
-                            const lineWordDiff = hasLine ? chunk.mineWordDiff.slice(charOffset, charOffset + lineText.length) : undefined;
-                            if (hasLine) {
-                              charOffset += lineText.length + 1;
-                            }
-                            
+                          {chunk.mLines.map((lineText, i) => {
+                            const lineNum = chunk.mIdxs[i] + 1;
+                            const lineWordDiff = chunk.mineWordDiff.slice(charOffset, charOffset + lineText.length);
+                            charOffset += lineText.length + 1;
                             return (
-                              <div key={i} className="line-row">
-                                <span className={`line-num ${isEmpty ? "empty-bg" : ""}`}>{lineNum}</span>
-                                <code className={`line-code ${isEmpty ? "empty-bg" : ""}`}>
-                                  {hasLine ? renderLineHtml(lineText, extension, lineWordDiff) : ""}
+                              <div key={i} className={`line-row ${chunk.type}`}>
+                                <span className="line-num">{lineNum}</span>
+                                <code className="line-code">
+                                  {renderLineHtml(lineText, extension, lineWordDiff)}
                                 </code>
                               </div>
                             );
                           })}
+                          {height > chunk.mLines.length && (
+                            <div className={`diff-spacer ${chunk.type}`} style={{ height: (height - chunk.mLines.length) * 20 }} />
+                          )}
                         </div>
                       );
                     })
@@ -1138,25 +1650,170 @@ function App() {
               {viewMode === "2way" && (
                 <div className="pane-wrapper middle-gutter">
                   <div className="pane-header">&nbsp;</div>
-                  <div id="pane-middle" className="pane-content scrollbar-hide" ref={middleRef} onScroll={handleScroll}>
-                    {processedChunks.map((chunk) => {
-                      const height = Math.max(chunk.bLines.length, chunk.mLines.length);
+                  <div id="pane-middle" className="pane-content scrollbar-hide" ref={middleRef} onScroll={handleScroll} onMouseEnter={() => { activeScrollRef.current = 'middle'; }}>
+                    {displayChunks.map((item) => {
+                      if (item.display === 'separator') return renderSeparator(item, 'middle');
+                      const chunk = item;
+                      const leftCount = chunk.bLines.length;
+                      const rightCount = chunk.mLines.length;
+                      const height = Math.max(leftCount, rightCount);
+                      
+                      let connectorSvg = null;
+                      if (chunk.type !== 'equal') {
+                        const leftHeight = leftCount * 20;
+                        const rightHeight = rightCount * 20;
+                        const svgWidth = 60;
+                        const colors = connectorColors[chunk.type] || { fill: "rgba(56, 85, 112, 0.3)", stroke: "rgba(74, 136, 199, 0.6)" };
+                        
+                        // Calculate dynamic shiftY based on scroll offsets
+                        const shiftY = ((chunk as any).rightY ?? 0) - ((chunk as any).middleY ?? 0) - (scrollTopRightRef.current - scrollTopLeftRef.current);
+                        const rightTopLocal = shiftY;
+                        const rightBottomLocal = rightHeight + shiftY;
+                        
+                        const fillPath = `M 0 0 L ${svgWidth} ${rightTopLocal} L ${svgWidth} ${rightBottomLocal} C ${svgWidth / 2} ${rightBottomLocal}, ${svgWidth / 2} ${leftHeight}, 0 ${leftHeight} Z`;
+                        const topPath = `M 0 0 C ${svgWidth / 2} 0, ${svgWidth / 2} ${rightTopLocal}, ${svgWidth} ${rightTopLocal}`;
+                        const bottomPath = `M ${svgWidth} ${rightBottomLocal} C ${svgWidth / 2} ${rightBottomLocal}, ${svgWidth / 2} ${leftHeight}, 0 ${leftHeight}`;
+
+                        connectorSvg = (
+                          <svg
+                            className="gutter-svg-connector"
+                            data-left-height={leftHeight}
+                            data-right-height={rightHeight}
+                            data-middle-y={(chunk as any).middleY ?? 0}
+                            data-right-y={(chunk as any).rightY ?? 0}
+                            style={{
+                              position: 'absolute',
+                              left: 60,
+                              top: 0,
+                              width: svgWidth,
+                              height: Math.max(leftHeight, rightHeight),
+                              pointerEvents: 'none',
+                              overflow: 'visible',
+                              zIndex: 1
+                            }}
+                          >
+                            <path className="fill-path" d={fillPath} fill={colors.fill} />
+                            <path className="top-path" d={topPath} stroke={colors.stroke} strokeWidth={1} fill="none" />
+                            <path className="bottom-path" d={bottomPath} stroke={colors.stroke} strokeWidth={1} fill="none" />
+                          </svg>
+                        );
+                      }
+
+                      const leftScroll = scrollTopLeftRef.current;
+                      const rightScroll = scrollTopRightRef.current;
+                      const middleScroll = middleRef.current ? middleRef.current.scrollTop : getMappedScrollTop('left', 'middle', leftScroll);
+                      
+                      const leftShift = ((chunk as any).leftY ?? 0) - leftScroll - (((chunk as any).middleY ?? 0) - middleScroll);
+                      const rightShift = ((chunk as any).rightY ?? 0) - rightScroll - (((chunk as any).middleY ?? 0) - middleScroll);
+                      
+                      const leftHeight = leftCount * 20;
+                      const rightHeight = rightCount * 20;
+
                       return (
                         <div 
                           key={chunk.id} 
                           className={`chunk-block ${chunk.type}`} 
-                          style={{ height: height * 20, position: 'relative' }}
+                          style={{ position: 'relative', height: height * 20 }}
                         >
-                          {chunk.type !== 'equal' && (
-                            <div 
-                              className="gutter-action" 
-                              title="Apply change"
-                              style={{ position: 'sticky', top: 0 }}
-                              onClick={() => alert("Apply change functionality is read-only.")}
-                            >
-                              <ChevronRight size={14} />
-                            </div>
-                          )}
+                          {connectorSvg}
+                          
+                          {/* Left Column (Line numbers and actions) */}
+                          <div
+                            className="gutter-column left"
+                            data-left-y={(chunk as any).leftY ?? 0}
+                            data-middle-y={(chunk as any).middleY ?? 0}
+                            style={{
+                              position: 'absolute',
+                              left: 0,
+                              top: 0,
+                              width: 60,
+                              height: leftHeight,
+                              transform: `translateY(${leftShift}px)`,
+                              willChange: 'transform'
+                            }}
+                          >
+                            {Array.from({ length: leftCount }).map((_, i) => {
+                              const leftLineNum = chunk.bIdxs[i] + 1;
+                              let leftAction = null;
+                              if (chunk.type !== 'equal') {
+                                if (i === 0) {
+                                  leftAction = (
+                                    <button
+                                      type="button"
+                                      className="gutter-action left"
+                                      title="Accept Left Change"
+                                      onClick={() => alert("Apply change functionality is read-only.")}
+                                    >
+                                      <ChevronRight size={12} />
+                                    </button>
+                                  );
+                                } else {
+                                  leftAction = (
+                                    <div className="gutter-status left">
+                                      <Check size={12} className="jetbrains-checkmark" />
+                                    </div>
+                                  );
+                                }
+                              }
+                              return (
+                                <div key={i} className="gutter-row-side left">
+                                  <span className={`gutter-line-num left ${chunk.type}`}>{leftLineNum}</span>
+                                  <div className={`gutter-action-wrapper left ${chunk.type}`}>
+                                    {leftAction}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Right Column (Line numbers and actions) */}
+                          <div
+                            className="gutter-column right"
+                            data-right-y={(chunk as any).rightY ?? 0}
+                            data-middle-y={(chunk as any).middleY ?? 0}
+                            style={{
+                              position: 'absolute',
+                              left: 120,
+                              top: 0,
+                              width: 60,
+                              height: rightHeight,
+                              transform: `translateY(${rightShift}px)`,
+                              willChange: 'transform'
+                            }}
+                          >
+                            {Array.from({ length: rightCount }).map((_, i) => {
+                              const rightLineNum = chunk.mIdxs[i] + 1;
+                              let rightAction = null;
+                              if (chunk.type !== 'equal') {
+                                if (i === 0) {
+                                  rightAction = (
+                                    <button
+                                      type="button"
+                                      className="gutter-action right"
+                                      title="Accept Right Change"
+                                      onClick={() => alert("Apply change functionality is read-only.")}
+                                    >
+                                      <ChevronLeft size={12} />
+                                    </button>
+                                  );
+                                } else {
+                                  rightAction = (
+                                    <div className="gutter-status right">
+                                      <Check size={12} className="jetbrains-checkmark" />
+                                    </div>
+                                  );
+                                }
+                              }
+                              return (
+                                <div key={i} className="gutter-row-side right">
+                                  <div className={`gutter-action-wrapper right ${chunk.type}`}>
+                                    {rightAction}
+                                  </div>
+                                  <span className={`gutter-line-num right ${chunk.type}`}>{rightLineNum}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       );
                     })}
@@ -1170,32 +1827,30 @@ function App() {
                     <strong>Base version</strong>
                     <span>common ancestor</span>
                   </div>
-                  <div className="pane-content" ref={centerRef} onScroll={handleScroll}>
-                    {chunksWithStartIdx.map((chunk) => {
+                  <div className="pane-content" ref={centerRef} onScroll={handleScroll} onMouseEnter={() => { activeScrollRef.current = 'center'; }}>
+                    {displayChunksWithStartIdx.map((item) => {
+                      if (item.display === 'separator') return renderSeparator(item, 'middle');
+                      const chunk = item;
                       const height = Math.max(chunk.mLines.length, chunk.resLines.length, chunk.tLines.length);
                       let charOffset = 0;
                       return (
                         <div key={chunk.id} className={`chunk-block ${chunk.type}`}>
-                          {Array.from({ length: height }).map((_, i) => {
-                            const hasLine = i < chunk.resLines.length;
-                            const lineText = hasLine ? chunk.resLines[i] : "";
-                            const lineNum = hasLine ? chunk.resIdxStart! + i : "";
-                            const isEmpty = !hasLine;
-                            
-                            const lineWordDiff = hasLine ? chunk.resultWordDiff.slice(charOffset, charOffset + lineText.length) : undefined;
-                            if (hasLine) {
-                              charOffset += lineText.length + 1;
-                            }
-                            
+                          {chunk.resLines.map((lineText, i) => {
+                            const lineNum = chunk.resIdxStart! + i;
+                            const lineWordDiff = chunk.resultWordDiff.slice(charOffset, charOffset + lineText.length);
+                            charOffset += lineText.length + 1;
                             return (
-                              <div key={i} className="line-row">
-                                <span className={`line-num ${isEmpty ? "empty-bg" : ""}`}>{lineNum}</span>
-                                <code className={`line-code ${isEmpty ? "empty-bg" : ""}`}>
-                                  {hasLine ? renderLineHtml(lineText, extension, lineWordDiff) : ""}
+                              <div key={i} className={`line-row ${chunk.type}`}>
+                                <span className="line-num">{lineNum}</span>
+                                <code className="line-code">
+                                  {renderLineHtml(lineText, extension, lineWordDiff)}
                                 </code>
                               </div>
                             );
                           })}
+                           {height > chunk.resLines.length && (
+                             <div className={`diff-spacer ${chunk.type}`} style={{ height: (height - chunk.resLines.length) * 20 }} />
+                           )}
                         </div>
                       );
                     })}
@@ -1219,62 +1874,56 @@ function App() {
                       </>
                     )}
                   </div>
-                  <div className="pane-content" ref={rightRef} onScroll={handleScroll}>
+                  <div className="pane-content" ref={rightRef} onScroll={handleScroll} onMouseEnter={() => { activeScrollRef.current = 'right'; }}>
                     {viewMode === "2way" ? (
-                      processedChunks.map((chunk) => {
+                      displayChunks.map((item) => {
+                        if (item.display === 'separator') return renderSeparator(item, 'right');
+                        const chunk = item;
                         const height = Math.max(chunk.bLines.length, chunk.mLines.length);
                         let charOffset = 0;
                         return (
                           <div key={chunk.id} className={`chunk-block ${chunk.type}`}>
-                            {Array.from({ length: height }).map((_, i) => {
-                              const hasLine = i < chunk.mLines.length;
-                              const lineText = hasLine ? chunk.mLines[i] : "";
-                              const lineNum = hasLine ? chunk.mIdxs[i] + 1 : "";
-                              const isEmpty = !hasLine;
-                              
-                              const lineWordDiff = hasLine ? chunk.mineWordDiff.slice(charOffset, charOffset + lineText.length) : undefined;
-                              if (hasLine) {
-                                charOffset += lineText.length + 1;
-                              }
-                              
+                            {chunk.mLines.map((lineText, i) => {
+                              const lineWordDiff = chunk.mineWordDiff.slice(charOffset, charOffset + lineText.length);
+                              charOffset += lineText.length + 1;
                               return (
-                                <div key={i} className="line-row">
-                                  <span className={`line-num ${isEmpty ? "empty-bg" : ""}`}>{lineNum}</span>
-                                  <code className={`line-code ${isEmpty ? "empty-bg" : ""}`}>
-                                    {hasLine ? renderLineHtml(lineText, extension, lineWordDiff) : ""}
+                                <div key={i} className={`line-row ${chunk.type}`}>
+                                  <code className="line-code">
+                                    {renderLineHtml(lineText, extension, lineWordDiff)}
                                   </code>
                                 </div>
                               );
                             })}
+                             {viewMode !== "2way" && height > chunk.mLines.length && (
+                               <div className={`diff-spacer ${chunk.type}`} style={{ height: (height - chunk.mLines.length) * 20 }} />
+                             )}
                           </div>
                         );
                       })
                     ) : (
-                      processedChunks.map((chunk) => {
+                      displayChunks.map((item) => {
+                        if (item.display === 'separator') return renderSeparator(item, 'right');
+                        const chunk = item;
                         const height = Math.max(chunk.mLines.length, chunk.resLines.length, chunk.tLines.length);
                         let charOffset = 0;
                         return (
                           <div key={chunk.id} className={`chunk-block ${chunk.type}`}>
-                            {Array.from({ length: height }).map((_, i) => {
-                              const hasLine = i < chunk.tLines.length;
-                              const lineText = hasLine ? chunk.tLines[i] : "";
-                              const lineNum = hasLine ? chunk.tIdxs[i] + 1 : "";
-                              const isEmpty = !hasLine;
-                              
-                              const lineWordDiff = hasLine ? chunk.theirsWordDiff.slice(charOffset, charOffset + lineText.length) : undefined;
-                              if (hasLine) {
-                                charOffset += lineText.length + 1;
-                              }
-                              
+                            {chunk.tLines.map((lineText, i) => {
+                              const lineNum = chunk.tIdxs[i] + 1;
+                              const lineWordDiff = chunk.theirsWordDiff.slice(charOffset, charOffset + lineText.length);
+                              charOffset += lineText.length + 1;
                               return (
-                                <div key={i} className="line-row">
-                                  <span className={`line-num ${isEmpty ? "empty-bg" : ""}`}>{lineNum}</span>
-                                  <code className={`line-code ${isEmpty ? "empty-bg" : ""}`}>
-                                    {hasLine ? renderLineHtml(lineText, extension, lineWordDiff) : ""}
+                                <div key={i} className={`line-row ${chunk.type}`}>
+                                  <span className="line-num">{lineNum}</span>
+                                  <code className="line-code">
+                                    {renderLineHtml(lineText, extension, lineWordDiff)}
                                   </code>
                                 </div>
                               );
                             })}
+                            {height > chunk.tLines.length && (
+                              <div className={`diff-spacer ${chunk.type}`} style={{ height: (height - chunk.tLines.length) * 20 }} />
+                            )}
                           </div>
                         );
                       })
