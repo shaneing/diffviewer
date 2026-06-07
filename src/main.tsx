@@ -950,17 +950,11 @@ function App() {
       const rightBottomLocal = rightHeight + shiftY;
       const svgWidth = 60;
 
-      const fillPath = `M 0 0 L ${svgWidth} ${rightTopLocal} L ${svgWidth} ${rightBottomLocal} C ${svgWidth / 2} ${rightBottomLocal}, ${svgWidth / 2} ${leftHeight}, 0 ${leftHeight} Z`;
-      const topPath = `M 0 0 C ${svgWidth / 2} 0, ${svgWidth / 2} ${rightTopLocal}, ${svgWidth} ${rightTopLocal}`;
-      const bottomPath = `M ${svgWidth} ${rightBottomLocal} C ${svgWidth / 2} ${rightBottomLocal}, ${svgWidth / 2} ${leftHeight}, 0 ${leftHeight}`;
+      const fillPath = `M 0 0 C ${svgWidth / 2} 0, ${svgWidth / 2} ${rightTopLocal}, ${svgWidth} ${rightTopLocal} L ${svgWidth} ${rightBottomLocal} C ${svgWidth / 2} ${rightBottomLocal}, ${svgWidth / 2} ${leftHeight}, 0 ${leftHeight} Z`;
 
       const fillEl = svgEl.querySelector('.fill-path');
-      const topEl = svgEl.querySelector('.top-path');
-      const bottomEl = svgEl.querySelector('.bottom-path');
 
       if (fillEl) fillEl.setAttribute('d', fillPath);
-      if (topEl) topEl.setAttribute('d', topPath);
-      if (bottomEl) bottomEl.setAttribute('d', bottomPath);
 
       const newSvgHeight = Math.max(leftHeight, rightHeight + Math.abs(shiftY));
       svgEl.style.height = `${newSvgHeight}px`;
@@ -1670,9 +1664,7 @@ function App() {
                         const rightTopLocal = shiftY;
                         const rightBottomLocal = rightHeight + shiftY;
                         
-                        const fillPath = `M 0 0 L ${svgWidth} ${rightTopLocal} L ${svgWidth} ${rightBottomLocal} C ${svgWidth / 2} ${rightBottomLocal}, ${svgWidth / 2} ${leftHeight}, 0 ${leftHeight} Z`;
-                        const topPath = `M 0 0 C ${svgWidth / 2} 0, ${svgWidth / 2} ${rightTopLocal}, ${svgWidth} ${rightTopLocal}`;
-                        const bottomPath = `M ${svgWidth} ${rightBottomLocal} C ${svgWidth / 2} ${rightBottomLocal}, ${svgWidth / 2} ${leftHeight}, 0 ${leftHeight}`;
+                        const fillPath = `M 0 0 C ${svgWidth / 2} 0, ${svgWidth / 2} ${rightTopLocal}, ${svgWidth} ${rightTopLocal} L ${svgWidth} ${rightBottomLocal} C ${svgWidth / 2} ${rightBottomLocal}, ${svgWidth / 2} ${leftHeight}, 0 ${leftHeight} Z`;
 
                         connectorSvg = (
                           <svg
@@ -1693,8 +1685,6 @@ function App() {
                             }}
                           >
                             <path className="fill-path" d={fillPath} fill={colors.fill} />
-                            <path className="top-path" d={topPath} stroke={colors.stroke} strokeWidth={1} fill="none" />
-                            <path className="bottom-path" d={bottomPath} stroke={colors.stroke} strokeWidth={1} fill="none" />
                           </svg>
                         );
                       }
