@@ -387,7 +387,7 @@ button {
   flex-direction: column;
   flex: 1;
   min-width: 0;
-  border-right: 1px solid #1e1e1e;
+  border-right: 0.5px solid #5f6164;
 }
 
 .pane-wrapper:last-child {
@@ -832,12 +832,12 @@ button {
 }
 
 .gutter-line-num.left {
-  border-right: 1px solid #1e1e1e;
+  border-right: none;
   background-color: #313335;
 }
 
 .gutter-line-num.right {
-  border-left: 1px solid #1e1e1e;
+  border-left: none;
   background-color: #313335;
 }
 
@@ -853,11 +853,11 @@ button {
 }
 
 .gutter-action-wrapper.left {
-  border-right: 1px solid #1e1e1e;
+  border-right: none;
 }
 
 .gutter-action-wrapper.right {
-  border-left: 1px solid #1e1e1e;
+  border-left: none;
 }
 
 /* Action button for Accept (» or «) */
