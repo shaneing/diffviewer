@@ -1,5 +1,5 @@
 {
-  "name": "codereviwer-desktop-diff-viewer",
+  "name": "diff-viewer",
   "version": "0.1.0",
   "private": true,
   "type": "module",

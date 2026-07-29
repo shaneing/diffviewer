@@ -463,7 +463,7 @@ mod tests {
                 .duration_since(UNIX_EPOCH)
                 .expect("clock should work")
                 .as_nanos();
-            let root = env::temp_dir().join(format!("codereviwer-{label}-{now}"));
+            let root = env::temp_dir().join(format!("diffviewer-{label}-{now}"));
             fs::create_dir_all(&root).expect("temp repo should be created");
 
             let repo = Self { root };

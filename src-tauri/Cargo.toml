@@ -1,12 +1,12 @@
 [package]
-name = "codereviwer_desktop_diff_viewer"
+name = "diff_viewer"
 version = "0.1.0"
 description = "Offline desktop diff viewer"
-authors = ["codereviwer"]
+authors = ["diffviewer"]
 edition = "2021"
 
 [lib]
-name = "codereviwer_desktop_diff_viewer_lib"
+name = "diff_viewer_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

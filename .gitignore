@@ -53,6 +53,8 @@ Icon
 Thumbs.db
 ehthumbs.db
 Desktop.ini
-*~
+# IDE / Agents / Indexers
+.gemini/
+.codegraph/
 
 !openspec/

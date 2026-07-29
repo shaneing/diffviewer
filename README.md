@@ -1,6 +1,6 @@
-# CodeReviwer Diff Viewer
+# Diff Viewer
 
-A high-performance, offline-first desktop application for inspecting Git working tree changes and resolving merge conflicts. Inspired by the JetBrains style diff viewer, CodeReviwer is built using **Tauri v2**, **React**, **TypeScript**, and **Rust**.
+A high-performance, offline-first desktop application for inspecting Git working tree changes and resolving merge conflicts. Inspired by the JetBrains style diff viewer, **Diff Viewer** is built using **Tauri v2**, **React**, **TypeScript**, and **Rust**.
 
 ---
 
@@ -21,6 +21,24 @@ A high-performance, offline-first desktop application for inspecting Git working
 - **Styling**: Vanilla CSS
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Backend / OS Integration**: [Rust](https://www.rust-lang.org/)
+
+---
+
+## Download & Releases (macOS)
+
+Pre-built macOS installer disk images (`.dmg`) are published automatically on every release.
+
+1. Download the latest `.dmg` installer from [GitHub Releases](https://github.com/shaneing/diffviewer/releases).
+2. Open the downloaded `.dmg` file and drag **Diff Viewer** into your `/Applications` folder.
+
+> [!NOTE]  
+> **Running Unsigned Binaries on macOS**:  
+> Since open-source release builds are unsigned, macOS Gatekeeper may show a security prompt when opening the app for the first time.
+> - To open: Right-click **Diff Viewer.app** in Finder and select **Open**.
+> - Alternatively, remove the quarantine attribute in Terminal:
+>   ```bash
+>   xattr -cr "/Applications/Diff Viewer.app"
+>   ```
 
 ---
 

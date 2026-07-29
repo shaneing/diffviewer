@@ -1,0 +1,53 @@
+name: macOS Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-mac-release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Tauri App & Create GitHub Release
+        uses: tauri-apps/tauri-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Diff Viewer v__VERSION__'
+          releaseBody: |
+            ## Diff Viewer v__VERSION__
+
+            ### Download & Installation
+            - Download the `.dmg` installer for macOS.
+            - Drag and drop **Diff Viewer** to your `/Applications` folder.
+
+            *Note: As this open-source build is unsigned, right-click the app and choose **Open** upon first launch, or run `xattr -cr "/Applications/Diff Viewer.app"` if prompted by macOS Gatekeeper.*
+          releaseDraft: true
+          prerelease: false

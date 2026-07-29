@@ -3,7 +3,7 @@ schema: spec-driven
 # Project context
 # This is shown to AI when creating artifacts.
 context: |
-  Application: CodeReviwer Desktop Diff Viewer
+  Application: Diff Viewer
   Tech Stack: React, Vite, TypeScript, Vanilla CSS, Lucide React, Tauri v2, Rust
   Domain & Key Patterns:
     - A read-only, fully offline desktop application for comparing local Git files and resolving merge conflicts.
