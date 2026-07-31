@@ -49,5 +49,5 @@ jobs:
             - Drag and drop **Diff Viewer** to your `/Applications` folder.
 
             *Note: As this open-source build is unsigned, right-click the app and choose **Open** upon first launch, or run `xattr -cr "/Applications/Diff Viewer.app"` if prompted by macOS Gatekeeper.*
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
